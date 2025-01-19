@@ -6,11 +6,13 @@ import (
 )
 
 func main() {
-    source := "LET foobar = 123"
+    source := "+- */"
     lx := lexer.NewLexer(source)
-
-    for lx.Peek() != '\x00' {
-        fmt.Print(string(lx.CurChar))
-        lx.NextChar()
+    
+    lx.NextChar()
+    token := lx.GetToken()
+    for token.Kind != lexer.TokenType["EOF"] {
+        fmt.Println(token.Kind)
+        token = lx.GetToken()
     } 
 }

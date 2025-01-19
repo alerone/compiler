@@ -2,27 +2,37 @@ package lexer
 
 
 type Token struct {
-    text string
-    kind int
+    Text string
+    Kind int
 }
 
 var TokenType map[string]int = map[string]int{
-    "eof" : -1,
-    "newline" : 0,
-    "number" : 2,
-    "string": 3,
+    "EOF" : -1,
+    "NEWLINE" : 0,
+    "NUMBER" : 2,
+    "STRING": 3,
     // Keywords
-    "label": 101,
-    "goto": 102,
-    "print": 103,
-    "input": 104,
-    "let": 105,
-    "if": 106,
-    "then": 107, 
-    "endif": 108,
-    "while": 109,
-    "repeat": 110,
-    "endwhile": 111,
+    "LABEL": 101,
+    "GOTO": 102,
+    "PRINT": 103,
+    "INPUT": 104,
+    "LET": 105,
+    "IF": 106,
+    "THEN": 107, 
+    "ENDIF": 108,
+    "WHILE": 109,
+    "REPEAT": 110,
+    "ENDWHILE": 111,
     // Operators
-
+    "EQ": 201,
+    "PLUS": 202,
+    "MINUS": 203,
+    "ASTERISK": 204,
+    "SLASH": 205,
+    "EQEQ": 206,
+    "NOTEQ": 207,
+    "LT": 208,
+    "LETQ": 209,
+    "GT": 210,
+    "GTEQ": 211,
 }
