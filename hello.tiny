@@ -1,4 +1,4 @@
 LABEL loop
 PRINT "hello, world!"
 GOTO loop
-JUMP GOTO
+LET foo = bar * 3 + 2

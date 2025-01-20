@@ -51,17 +51,17 @@ func (self *Parser) Abort(message string) {
 func (self *Parser) Program() {
 	fmt.Println("PROGRAM")
 
-    for self.checkToken(lexer.NEWLINE){
-        self.NextToken()
-    }
+	for self.checkToken(lexer.NEWLINE) {
+		self.NextToken()
+	}
 
 	// Parse all statements in the program until EOF
 	for !self.checkToken(lexer.EOF) {
-		self.Statement()
+		self.statement()
 	}
 }
 
-func (self *Parser) Statement() {
+func (self *Parser) statement() {
 	// Check the first token to see what kind of statement is
 
 	switch {
@@ -73,32 +73,32 @@ func (self *Parser) Statement() {
 		if self.checkToken(lexer.STRING) {
 			self.NextToken()
 		} else {
-			self.Expression()
+			self.expression()
 		}
 	// "IF" comparison "THEN" {statement} "ENDIF"
 	case self.checkToken(lexer.IF):
 		fmt.Println("STATEMENT-IF")
 		self.NextToken()
-		self.Comparison()
+		self.comparison()
 
 		self.match(lexer.THEN)
 		self.nl()
 
 		for !self.checkToken(lexer.ENDIF) {
-			self.Statement()
+			self.statement()
 		}
 		self.match(lexer.ENDIF)
 	// "WHILE" comparison "REPEAT" nl {statement} "ENDWHILE"
 	case self.checkToken(lexer.WHILE):
 		fmt.Println("STATEMENT-WHILE")
 		self.NextToken()
-		self.Comparison()
+		self.comparison()
 
 		self.match(lexer.REPEAT)
 		self.nl()
 
 		for !self.checkToken(lexer.ENDWHILE) {
-			self.Statement()
+			self.statement()
 		}
 		self.match(lexer.ENDWHILE)
 		// "LABEL" ident
@@ -118,7 +118,7 @@ func (self *Parser) Statement() {
 		self.match(lexer.IDENT)
 
 		self.match(lexer.EQ)
-		self.Expression()
+		self.expression()
 		// "INPUT" ident
 	case self.checkToken(lexer.INPUT):
 		fmt.Println("STATEMENT-INPUT")
@@ -132,17 +132,75 @@ func (self *Parser) Statement() {
 	self.nl()
 }
 
-func (self *Parser) Expression() {
+// expression ::= term {( "-" | "+" ) term}
+func (self *Parser) expression() {
 	fmt.Println("EXPRESSION")
+
+	self.term()
+	for self.checkToken(lexer.MINUS) || self.checkToken(lexer.PLUS) {
+		self.NextToken()
+		self.term()
+	}
 }
 
-// 
-func (self *Parser) Comparison() {
+// term ::= unary {( "/" | "*" ) unary}
+func (self *Parser) term() {
+	fmt.Println("TERM")
+
+	self.unary()
+	for self.checkToken(lexer.SLASH) || self.checkToken(lexer.ASTERISK) {
+		self.NextToken()
+		self.unary()
+	}
+}
+
+// unary ::= ["+" | "-"] primary
+func (self *Parser) unary() {
+	fmt.Println("UNARY")
+	if self.checkToken(lexer.PLUS) || self.checkToken(lexer.MINUS) {
+		self.NextToken()
+	}
+    self.primary()
+}
+
+// primary ::= number | ident
+func (self *Parser) primary() {
+	fmt.Printf("PRIMARY (%v)\n", self.curToken.Text)
+	switch {
+	case self.checkToken(lexer.NUMBER):
+		self.NextToken()
+	case self.checkToken(lexer.IDENT):
+		self.NextToken()
+	default:
+		self.Abort(fmt.Sprintf("Unexpected token at: %v", self.curToken.Text))
+	}
+}
+
+// comparison ::= expression (("==" | "!=" | ">" | ">=" | "<" | "<=") expression)+
+func (self *Parser) comparison() {
 	fmt.Println("COMPARISON")
 
+	self.expression()
+	// Must be one comparison operator and another expression.
+	if self.isComparisonOperator() {
+		self.NextToken()
+		self.expression()
+	} else {
+		self.Abort(fmt.Sprint("Expected comparison operator at: ", self.curToken.Text))
+	}
+
+	for self.isComparisonOperator() {
+		self.NextToken()
+		self.expression()
+	}
+
 }
 
-func (self *Parser) Ident() {
+func (self *Parser) isComparisonOperator() bool {
+	return self.checkToken(lexer.GT) || self.checkToken(lexer.GTEQ) || self.checkToken(lexer.LT) || self.checkToken(lexer.LTEQ) || self.checkToken(lexer.EQ) || self.checkToken(lexer.EQEQ) || self.checkToken(lexer.NOTEQ)
+}
+
+func (self *Parser) ident() {
 	fmt.Println("IDENT")
 }
 
