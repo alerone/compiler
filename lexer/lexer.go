@@ -134,8 +134,14 @@ func (self *Lexer) GetToken() Token {
 				self.NextChar()
 			}
 		}
+        
+
 
 		tokText := self.source[startPosition:self.curPos]
+        if self.curPos == startPosition {
+            tokText = string(self.CurChar)
+        }
+        fmt.Println(startPosition, self.curPos)
 		token = Token{tokText, NUMBER}
 	case self.CurChar == '/':
 		token = Token{stringChar, SLASH}
