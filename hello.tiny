@@ -4,7 +4,7 @@ PRINT ""
 
 LET a = 0
 LET b = 1
-WHILE nms > 0 REPEAT
+WHILE nums > 0 REPEAT
     PRINT a
     LET c = a + b
     LET a = b

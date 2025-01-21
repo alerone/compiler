@@ -1,6 +1,7 @@
 package main
 
 import (
+	"compiler/emitter"
 	"compiler/lexer"
 	"compiler/parser"
 	"fmt"
@@ -23,10 +24,12 @@ func main() {
 	source, err := os.ReadFile(os.Args[1])
 	check(err)
 
-	lxer := lexer.NewLexer(string(source))
-	pser := parser.NewParser(lxer)
+	lexeR := lexer.NewLexer(string(source))
+    emitteR := emitter.NewEmitter("out.c")
+	parseR := parser.NewParser(lexeR, emitteR)
 
-	pser.Program()
-	fmt.Println("Parsing completed.")
+	parseR.Program()
+    emitteR.WriteFile()
+	fmt.Println("Compiling completed.")
 
 }

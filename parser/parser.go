@@ -1,12 +1,14 @@
 package parser
 
 import (
+	"compiler/emitter"
 	"compiler/lexer"
 	"fmt"
 )
 
 type Parser struct {
 	lexer          lexer.Lexer
+	emitter        emitter.Emitter
 	curToken       lexer.Token
 	peekToken      lexer.Token
 	labelsDeclared map[string]bool
@@ -14,15 +16,17 @@ type Parser struct {
 	symbols        map[string]bool
 }
 
-func NewParser(lexer lexer.Lexer) Parser {
+func NewParser(lexer lexer.Lexer, emitter emitter.Emitter) Parser {
 	p := Parser{lexer: lexer}
 
-	p.labelsDeclared = make(map[string]bool)
-	p.labelsGotoed = make(map[string]int)
-	p.symbols = make(map[string]bool)
+    p.emitter = emitter
+
+	p.labelsDeclared = make(map[string]bool) // Keep track of all labels declared.
+	p.labelsGotoed = make(map[string]int) // All labels goto'ed, so we know if they exist or not.
+	p.symbols = make(map[string]bool) // Variables we have declared so far.
 
 	p.NextToken()
-	p.NextToken()
+	p.NextToken() // Call it twice to initialize the current and the peek.
 	return p
 }
 
@@ -59,6 +63,12 @@ func (self *Parser) Abort(message string) {
 func (self *Parser) Program() {
 	fmt.Println("PROGRAM")
 
+    // For each program we need a main function (library allows us to printf and scanf things).
+    self.emitter.HeaderLine("#include <stdio.h>")
+    self.emitter.HeaderLine("int main(void){")
+
+    fmt.Println("header:",self.emitter.Header)
+
 	for self.checkToken(lexer.NEWLINE) {
 		self.NextToken()
 	}
@@ -67,6 +77,9 @@ func (self *Parser) Program() {
 	for !self.checkToken(lexer.EOF) {
 		self.statement()
 	}
+
+    self.emitter.EmitLine("return 0;")
+    self.emitter.EmitLine("}")
 
 	// Check each label referenced in a GOTO is declared.
 	for key := range self.labelsGotoed {
@@ -148,12 +161,12 @@ func (self *Parser) statement() {
 		self.expression()
 		// "INPUT" ident
 	case self.checkToken(lexer.INPUT):
-        fmt.Println("STATEMENT-INPUT")
+		fmt.Println("STATEMENT-INPUT")
 		self.NextToken()
 
-        if !self.symbols[self.curToken.Text]{
-            self.symbols[self.curToken.Text] = true
-        }
+		if !self.symbols[self.curToken.Text] {
+			self.symbols[self.curToken.Text] = true
+		}
 		self.match(lexer.IDENT)
 	default:
 		self.Abort(fmt.Sprintf("Invalid statement at %v (%v)", self.curToken.Text, self.curToken.Kind))
@@ -221,17 +234,15 @@ func (self *Parser) primary() {
 	case self.checkToken(lexer.NUMBER):
 		self.NextToken()
 	case self.checkToken(lexer.IDENT):
-        // Ensure the variable already exists!
-        if !self.symbols[self.curToken.Text] {
-            self.Abort(fmt.Sprintf("Referencing variable before assignment: %v", self.curToken.Text))
-        }
+		// Ensure the variable already exists!
+		if !self.symbols[self.curToken.Text] {
+			self.Abort(fmt.Sprintf("Referencing variable before assignment: %v", self.curToken.Text))
+		}
 		self.NextToken()
 	default:
 		self.Abort(fmt.Sprintf("Unexpected token at: %v", self.curToken.Text))
 	}
 }
-
-
 
 func (self *Parser) isComparisonOperator() bool {
 	return self.checkToken(lexer.GT) || self.checkToken(lexer.GTEQ) || self.checkToken(lexer.LT) || self.checkToken(lexer.LTEQ) || self.checkToken(lexer.EQ) || self.checkToken(lexer.EQEQ) || self.checkToken(lexer.NOTEQ)
