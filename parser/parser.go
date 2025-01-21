@@ -6,13 +6,21 @@ import (
 )
 
 type Parser struct {
-	lexer     lexer.Lexer
-	curToken  lexer.Token
-	peekToken lexer.Token
+	lexer          lexer.Lexer
+	curToken       lexer.Token
+	peekToken      lexer.Token
+	labelsDeclared map[string]bool
+	labelsGotoed   map[string]int
+	symbols        map[string]bool
 }
 
 func NewParser(lexer lexer.Lexer) Parser {
 	p := Parser{lexer: lexer}
+
+	p.labelsDeclared = make(map[string]bool)
+	p.labelsGotoed = make(map[string]int)
+	p.symbols = make(map[string]bool)
+
 	p.NextToken()
 	p.NextToken()
 	return p
@@ -42,7 +50,7 @@ func (self *Parser) NextToken() {
 	self.peekToken = self.lexer.GetToken()
 }
 
-// Advances the next Token.
+// Aborts the compiling with an error message.
 func (self *Parser) Abort(message string) {
 	panic(fmt.Sprintf("Error. %v", message))
 }
@@ -59,11 +67,17 @@ func (self *Parser) Program() {
 	for !self.checkToken(lexer.EOF) {
 		self.statement()
 	}
+
+	// Check each label referenced in a GOTO is declared.
+	for key := range self.labelsGotoed {
+		if !self.labelsDeclared[key] {
+			self.Abort(fmt.Sprintf("GOTO to a non-declared label: %v", key))
+		}
+	}
 }
 
 func (self *Parser) statement() {
 	// Check the first token to see what kind of statement is
-
 	switch {
 	// "PRINT" (expresion | string)
 	case self.checkToken(lexer.PRINT):
@@ -105,24 +119,41 @@ func (self *Parser) statement() {
 	case self.checkToken(lexer.LABEL):
 		fmt.Println("STATEMENT-LABEL")
 		self.NextToken()
+
+		if self.labelsDeclared[self.curToken.Text] {
+			self.Abort(fmt.Sprintf("Label already exists: %v", self.curToken.Text))
+		}
+		self.labelsDeclared[self.curToken.Text] = true
+
 		self.match(lexer.IDENT)
 		// "GOTO" ident
 	case self.checkToken(lexer.GOTO):
 		fmt.Println("STATEMENT-GOTO")
 		self.NextToken()
+		self.labelsGotoed[self.curToken.Text]++
 		self.match(lexer.IDENT)
 		// "LET" ident "=" expression
 	case self.checkToken(lexer.LET):
 		fmt.Println("STATEMENT-LET")
 		self.NextToken()
+
+		// Check if ident exists in symbols table. If not, declare it.
+		if !self.symbols[self.curToken.Text] {
+			self.symbols[self.curToken.Text] = true
+		}
+
 		self.match(lexer.IDENT)
 
 		self.match(lexer.EQ)
 		self.expression()
 		// "INPUT" ident
 	case self.checkToken(lexer.INPUT):
-		fmt.Println("STATEMENT-INPUT")
+        fmt.Println("STATEMENT-INPUT")
 		self.NextToken()
+
+        if !self.symbols[self.curToken.Text]{
+            self.symbols[self.curToken.Text] = true
+        }
 		self.match(lexer.IDENT)
 	default:
 		self.Abort(fmt.Sprintf("Invalid statement at %v (%v)", self.curToken.Text, self.curToken.Kind))
@@ -130,6 +161,26 @@ func (self *Parser) statement() {
 	}
 
 	self.nl()
+}
+
+// comparison ::= expression (("==" | "!=" | ">" | ">=" | "<" | "<=") expression)+
+func (self *Parser) comparison() {
+	fmt.Println("COMPARISON")
+
+	self.expression()
+	// Must be one comparison operator and another expression.
+	if self.isComparisonOperator() {
+		self.NextToken()
+		self.expression()
+	} else {
+		self.Abort(fmt.Sprint("Expected comparison operator at: ", self.curToken.Text))
+	}
+
+	for self.isComparisonOperator() {
+		self.NextToken()
+		self.expression()
+	}
+
 }
 
 // expression ::= term {( "-" | "+" ) term}
@@ -160,7 +211,7 @@ func (self *Parser) unary() {
 	if self.checkToken(lexer.PLUS) || self.checkToken(lexer.MINUS) {
 		self.NextToken()
 	}
-    self.primary()
+	self.primary()
 }
 
 // primary ::= number | ident
@@ -170,38 +221,20 @@ func (self *Parser) primary() {
 	case self.checkToken(lexer.NUMBER):
 		self.NextToken()
 	case self.checkToken(lexer.IDENT):
+        // Ensure the variable already exists!
+        if !self.symbols[self.curToken.Text] {
+            self.Abort(fmt.Sprintf("Referencing variable before assignment: %v", self.curToken.Text))
+        }
 		self.NextToken()
 	default:
 		self.Abort(fmt.Sprintf("Unexpected token at: %v", self.curToken.Text))
 	}
 }
 
-// comparison ::= expression (("==" | "!=" | ">" | ">=" | "<" | "<=") expression)+
-func (self *Parser) comparison() {
-	fmt.Println("COMPARISON")
 
-	self.expression()
-	// Must be one comparison operator and another expression.
-	if self.isComparisonOperator() {
-		self.NextToken()
-		self.expression()
-	} else {
-		self.Abort(fmt.Sprint("Expected comparison operator at: ", self.curToken.Text))
-	}
-
-	for self.isComparisonOperator() {
-		self.NextToken()
-		self.expression()
-	}
-
-}
 
 func (self *Parser) isComparisonOperator() bool {
 	return self.checkToken(lexer.GT) || self.checkToken(lexer.GTEQ) || self.checkToken(lexer.LT) || self.checkToken(lexer.LTEQ) || self.checkToken(lexer.EQ) || self.checkToken(lexer.EQEQ) || self.checkToken(lexer.NOTEQ)
-}
-
-func (self *Parser) ident() {
-	fmt.Println("IDENT")
 }
 
 func (self *Parser) nl() {
