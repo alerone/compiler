@@ -8,7 +8,7 @@ import (
 
 type Parser struct {
 	lexer          lexer.Lexer
-	emitter        emitter.Emitter
+	emitter        *emitter.Emitter
 	curToken       lexer.Token
 	peekToken      lexer.Token
 	labelsDeclared map[string]bool
@@ -16,7 +16,7 @@ type Parser struct {
 	symbols        map[string]bool
 }
 
-func NewParser(lexer lexer.Lexer, emitter emitter.Emitter) Parser {
+func NewParser(lexer lexer.Lexer, emitter *emitter.Emitter) Parser {
 	p := Parser{lexer: lexer}
 
     p.emitter = emitter
@@ -61,13 +61,10 @@ func (self *Parser) Abort(message string) {
 
 // program ::= {statement}
 func (self *Parser) Program() {
-	fmt.Println("PROGRAM")
 
     // For each program we need a main function (library allows us to printf and scanf things).
     self.emitter.HeaderLine("#include <stdio.h>")
     self.emitter.HeaderLine("int main(void){")
-
-    fmt.Println("header:",self.emitter.Header)
 
 	for self.checkToken(lexer.NEWLINE) {
 		self.NextToken()
@@ -94,79 +91,96 @@ func (self *Parser) statement() {
 	switch {
 	// "PRINT" (expresion | string)
 	case self.checkToken(lexer.PRINT):
-		fmt.Println("STATEMENT-PRINT")
 		self.NextToken()
 
 		if self.checkToken(lexer.STRING) {
+            // Simple string, so print it.
+            self.emitter.EmitLine("printf(\"" + self.curToken.Text + "\\n\");")
 			self.NextToken()
 		} else {
+            // Expect an expression and print the result as a float.
+            self.emitter.Emit("printf(\"%" + ".2f\\n\", (float)(")
 			self.expression()
+            self.emitter.EmitLine("));")
 		}
 	// "IF" comparison "THEN" {statement} "ENDIF"
 	case self.checkToken(lexer.IF):
-		fmt.Println("STATEMENT-IF")
 		self.NextToken()
+        self.emitter.Emit("if(")
 		self.comparison()
 
 		self.match(lexer.THEN)
 		self.nl()
+        self.emitter.EmitLine("){")
 
 		for !self.checkToken(lexer.ENDIF) {
 			self.statement()
 		}
 		self.match(lexer.ENDIF)
+        self.emitter.EmitLine("}")
 	// "WHILE" comparison "REPEAT" nl {statement} "ENDWHILE"
 	case self.checkToken(lexer.WHILE):
-		fmt.Println("STATEMENT-WHILE")
 		self.NextToken()
+        self.emitter.Emit("while(")
 		self.comparison()
 
 		self.match(lexer.REPEAT)
 		self.nl()
+        self.emitter.EmitLine("){")
 
 		for !self.checkToken(lexer.ENDWHILE) {
 			self.statement()
 		}
 		self.match(lexer.ENDWHILE)
+        self.emitter.EmitLine("}")
 		// "LABEL" ident
 	case self.checkToken(lexer.LABEL):
-		fmt.Println("STATEMENT-LABEL")
 		self.NextToken()
 
 		if self.labelsDeclared[self.curToken.Text] {
 			self.Abort(fmt.Sprintf("Label already exists: %v", self.curToken.Text))
 		}
 		self.labelsDeclared[self.curToken.Text] = true
-
+        self.emitter.EmitLine(self.curToken.Text + ":")
 		self.match(lexer.IDENT)
 		// "GOTO" ident
 	case self.checkToken(lexer.GOTO):
-		fmt.Println("STATEMENT-GOTO")
 		self.NextToken()
 		self.labelsGotoed[self.curToken.Text]++
+        self.emitter.EmitLine("goto " + self.curToken.Text + ";")
 		self.match(lexer.IDENT)
 		// "LET" ident "=" expression
 	case self.checkToken(lexer.LET):
-		fmt.Println("STATEMENT-LET")
 		self.NextToken()
 
 		// Check if ident exists in symbols table. If not, declare it.
 		if !self.symbols[self.curToken.Text] {
 			self.symbols[self.curToken.Text] = true
+            self.emitter.HeaderLine("float " + self.curToken.Text + ";")
 		}
+
+        self.emitter.Emit(self.curToken.Text + " = ")
 
 		self.match(lexer.IDENT)
 
 		self.match(lexer.EQ)
 		self.expression()
+        self.emitter.EmitLine(";")
 		// "INPUT" ident
 	case self.checkToken(lexer.INPUT):
-		fmt.Println("STATEMENT-INPUT")
 		self.NextToken()
 
 		if !self.symbols[self.curToken.Text] {
 			self.symbols[self.curToken.Text] = true
+            self.emitter.HeaderLine("float " + self.curToken.Text + ";")
 		}
+
+        self.emitter.EmitLine("if(0 == scanf(\"%" + "f\", &" + self.curToken.Text + ")) {")
+        self.emitter.EmitLine(self.curToken.Text + " = 0;")
+        self.emitter.Emit("scanf(\"%")
+        self.emitter.EmitLine("*s\");")
+        self.emitter.EmitLine("}")
+
 		self.match(lexer.IDENT)
 	default:
 		self.Abort(fmt.Sprintf("Invalid statement at %v (%v)", self.curToken.Text, self.curToken.Kind))
@@ -178,11 +192,10 @@ func (self *Parser) statement() {
 
 // comparison ::= expression (("==" | "!=" | ">" | ">=" | "<" | "<=") expression)+
 func (self *Parser) comparison() {
-	fmt.Println("COMPARISON")
-
 	self.expression()
 	// Must be one comparison operator and another expression.
 	if self.isComparisonOperator() {
+        self.emitter.Emit(self.curToken.Text)
 		self.NextToken()
 		self.expression()
 	} else {
@@ -190,6 +203,7 @@ func (self *Parser) comparison() {
 	}
 
 	for self.isComparisonOperator() {
+        self.emitter.Emit(self.curToken.Text)
 		self.NextToken()
 		self.expression()
 	}
@@ -198,10 +212,9 @@ func (self *Parser) comparison() {
 
 // expression ::= term {( "-" | "+" ) term}
 func (self *Parser) expression() {
-	fmt.Println("EXPRESSION")
-
 	self.term()
 	for self.checkToken(lexer.MINUS) || self.checkToken(lexer.PLUS) {
+        self.emitter.Emit(self.curToken.Text)
 		self.NextToken()
 		self.term()
 	}
@@ -209,10 +222,9 @@ func (self *Parser) expression() {
 
 // term ::= unary {( "/" | "*" ) unary}
 func (self *Parser) term() {
-	fmt.Println("TERM")
-
 	self.unary()
 	for self.checkToken(lexer.SLASH) || self.checkToken(lexer.ASTERISK) {
+        self.emitter.Emit(self.curToken.Text)
 		self.NextToken()
 		self.unary()
 	}
@@ -220,8 +232,8 @@ func (self *Parser) term() {
 
 // unary ::= ["+" | "-"] primary
 func (self *Parser) unary() {
-	fmt.Println("UNARY")
 	if self.checkToken(lexer.PLUS) || self.checkToken(lexer.MINUS) {
+        self.emitter.Emit(self.curToken.Text)
 		self.NextToken()
 	}
 	self.primary()
@@ -229,15 +241,16 @@ func (self *Parser) unary() {
 
 // primary ::= number | ident
 func (self *Parser) primary() {
-	fmt.Printf("PRIMARY (%v)\n", self.curToken.Text)
 	switch {
 	case self.checkToken(lexer.NUMBER):
+        self.emitter.Emit(self.curToken.Text)
 		self.NextToken()
 	case self.checkToken(lexer.IDENT):
 		// Ensure the variable already exists!
 		if !self.symbols[self.curToken.Text] {
 			self.Abort(fmt.Sprintf("Referencing variable before assignment: %v", self.curToken.Text))
 		}
+        self.emitter.Emit(self.curToken.Text)
 		self.NextToken()
 	default:
 		self.Abort(fmt.Sprintf("Unexpected token at: %v", self.curToken.Text))
@@ -249,8 +262,6 @@ func (self *Parser) isComparisonOperator() bool {
 }
 
 func (self *Parser) nl() {
-	fmt.Println("NEWLINE")
-
 	// Require at least one newline.
 	self.match(lexer.NEWLINE)
 	// But we will allow more newlines possible

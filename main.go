@@ -26,7 +26,7 @@ func main() {
 
 	lexeR := lexer.NewLexer(string(source))
     emitteR := emitter.NewEmitter("out.c")
-	parseR := parser.NewParser(lexeR, emitteR)
+	parseR := parser.NewParser(lexeR, &emitteR)
 
 	parseR.Program()
     emitteR.WriteFile()

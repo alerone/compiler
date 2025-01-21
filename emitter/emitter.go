@@ -15,7 +15,7 @@ type Emitter struct {
 }
 
 func NewEmitter(fullPath string) Emitter{
-    return Emitter{FullPath: fullPath}    
+    return Emitter{FullPath: fullPath, Header: "", Code: ""}    
 }
 
 // Add a fragment of C code.
@@ -39,7 +39,6 @@ func (self *Emitter) WriteFile() {
     if err != nil {
         panic(fmt.Sprintf("Error. can't open/create output file: %v", self.FullPath))
     }
-    fmt.Println("header:", self.Header)
     _, err = fileOutput.Write([]byte(self.Header + self.Code))  
     if err != nil {
         panic(fmt.Sprintf("Error. can't write to output file: %v", self.FullPath))

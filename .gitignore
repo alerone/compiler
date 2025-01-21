@@ -1,0 +1,5 @@
+# Ignorar archivos ejecutables
+*.exe
+
+# Ignorar archivos de código fuente C
+*.c
